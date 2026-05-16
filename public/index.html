@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NodeDesk</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.navbar{display:flex;align-items:center;background:#16213e;padding:0 16px;height:48px;border-bottom:2px solid #0f3460;flex-shrink:0}
+.tabs{display:flex;gap:4px}
+.tab{padding:10px 24px;cursor:pointer;color:#8892b0;font-size:14px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;transition:all .2s}
+.tab:hover{color:#ccd6f6}
+.tab.active{color:#64ffda;border-bottom-color:#64ffda}
+.auth-section{margin-left:auto;display:flex;align-items:center;gap:8px}
+.auth-section label{font-size:12px;color:#8892b0}
+.auth-section input{background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;padding:6px 12px;border-radius:4px;font-size:13px;width:160px}
+.panel{flex:1;display:none;flex-direction:column;overflow:hidden}
+.panel.active{display:flex}
+body.loading .panel{display:none !important}
+
+.btn{padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.btn-primary{background:#0f3460;color:#e0e0e0}
+.btn-primary:hover{background:#1a4a8a}
+.btn-danger{background:#e74c3c;color:#fff}
+.btn-danger:hover{background:#c0392b}
+.btn-success{background:#27ae60;color:#fff}
+.btn-success:hover{background:#2ecc71}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.status-dot.connected{background:#2ecc71}
+.status-dot.disconnected{background:#e74c3c}
+#files-panel{padding:0;overflow:hidden;flex-direction:row}
+.drive-sidebar{width:160px;background:#16213e;border-right:1px solid #0f3460;overflow-y:auto;flex-shrink:0;padding:8px 0}
+.drive-sidebar-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#8892b0;padding:8px 12px 4px;font-weight:600}
+.drive-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;color:#ccd6f6;font-size:13px;transition:background .15s}
+.drive-item:hover{background:#0f3460}
+.drive-item.active{background:#0f3460;color:#64ffda}
+.drive-icon{font-size:16px}
+.drive-label{font-weight:600}
+.drive-info{font-size:10px;color:#8892b0;margin-top:2px}
+.files-main{flex:1;display:flex;flex-direction:column;padding:12px 16px;gap:8px;overflow:hidden;min-width:0}
+.path-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#16213e;border-radius:6px;flex-shrink:0}
+.path-bar input{flex:1;background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;padding:6px 12px;border-radius:4px;font-size:14px;font-family:'Segoe UI',system-ui,sans-serif}
+.path-bar .btn{flex-shrink:0}
+.file-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.file-status{margin-left:auto;font-size:12px;color:#8892b0}
+.file-table{width:100%;border-collapse:collapse}
+.file-table th{text-align:left;padding:8px 12px;background:#16213e;color:#8892b0;font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:1;cursor:pointer;user-select:none}
+.file-table th:hover{color:#ccd6f6}
+.file-table th .sort-arrow{font-size:10px;margin-left:4px}
+.file-table td{padding:6px 12px;border-bottom:1px solid #16213e20;font-size:13px}
+.file-table tr:hover td{background:#16213e60}
+.file-table tr.parent-row td{border-bottom:1px solid #0f3460}
+.file-name{cursor:pointer;display:flex;align-items:center;gap:8px}
+.file-name.folder{color:#64ffda}
+.file-name.file{color:#ccd6f6}
+.file-icon{font-size:15px;flex-shrink:0;width:20px;text-align:center}
+.file-actions{display:flex;gap:4px}
+.file-actions .btn{padding:3px 8px;font-size:11px}
+#desktop-panel{padding:16px;overflow:hidden;flex-direction:column}
+.desktop-toolbar{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.desktop-toolbar select{background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;padding:6px 10px;border-radius:4px;font-size:13px}
+.live-indicator{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#2ecc71}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#2ecc71;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.desktop-view{flex:1;display:flex;justify-content:center;align-items:center;overflow:hidden;position:relative}
+.desktop-view img{max-width:100%;max-height:100%;border-radius:6px;border:1px solid #0f3460;object-fit:contain}
+.desktop-view canvas{border-radius:6px;border:1px solid #0f3460;cursor:default}
+.desktop-view canvas.autofit{max-width:100%;max-height:100%;object-fit:contain}
+.control-active{border-color:#2ecc71 !important;box-shadow:0 0 10px rgba(46,204,113,0.3)}
+#settings-panel{padding:24px;overflow:auto}
+.settings-form{max-width:500px}
+.settings-group{margin-bottom:20px}
+.settings-group label{display:block;font-size:13px;color:#8892b0;margin-bottom:6px}
+.settings-group input{width:100%;padding:8px 12px;background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;border-radius:4px;font-size:14px}
+.settings-group .hint{font-size:11px;color:#4a5568;margin-top:4px}
+.settings-msg{margin-top:12px;font-size:13px}
+#login-screen{position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;display:flex;justify-content:center;align-items:center;z-index:2000}
+.login-box{background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:32px;min-width:320px;text-align:center}
+.login-box h2{color:#64ffda;margin-bottom:20px;font-size:20px}
+.login-box input{width:100%;padding:10px 14px;background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;border-radius:4px;font-size:14px;margin-bottom:16px}
+.login-box .btn{width:100%;padding:10px;font-size:14px}
+.login-error{color:#e74c3c;font-size:13px;margin-bottom:12px;display:none}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;justify-content:center;align-items:center;z-index:1000;display:none}
+.modal{background:#16213e;border-radius:8px;padding:24px;min-width:300px;border:1px solid #0f3460}
+.modal h3{margin-bottom:16px;color:#e0e0e0}
+.modal input{width:100%;padding:8px 12px;background:#0a0a1a;border:1px solid #0f3460;color:#e0e0e0;border-radius:4px;margin-bottom:12px;font-size:14px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.hidden-input{display:none}
+.table-wrap{flex:1;overflow:auto;border-radius:6px;border:1px solid #0f3460;min-height:0}
+#logs-panel{padding:16px}
+.log-toolbar{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.log-container{flex:1;background:#0a0a1a;border:1px solid #0f3460;border-radius:6px;overflow:auto;padding:12px;font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;line-height:1.6}
+.log-entry{white-space:pre-wrap;word-break:break-all}
+.log-entry .log-time{color:#4a5568}
+.log-entry.log-info .log-msg{color:#8892b0}
+.log-entry.log-success .log-msg{color:#2ecc71}
+.log-entry.log-warn .log-msg{color:#f39c12}
+.log-entry.log-error .log-msg{color:#e74c3c}
+</style>
+</head>
+<body class="loading">
+<div id="login-screen" style="display:none">
+<div class="login-box">
+<h2>NodeDesk</h2>
+<div class="login-error" id="login-error">Incorrect password</div>
+<input type="password" id="login-password" placeholder="Enter password">
+<button class="btn btn-success" id="btn-login">Login</button>
+</div>
+</div>
+<nav class="navbar" id="main-navbar" style="display:none">
+<div class="tabs">
+    <button class="tab" data-tab="files">Files</button>
+<button class="tab active" data-tab="desktop">Desktop</button>
+<button class="tab" data-tab="logs">Logs</button>
+<button class="tab" data-tab="settings">Settings</button>
+<button class="tab" data-tab="about">About</button>
+</div>
+<div class="auth-section">
+<button class="btn btn-danger" id="btn-logout" style="display:none">Logout</button>
+</div>
+</nav>
+<div id="files-panel" class="panel">
+<div class="drive-sidebar">
+<div class="drive-sidebar-title">Quick Access</div>
+<div id="shortcut-list"></div>
+<div class="drive-sidebar-title" style="margin-top:8px;border-top:1px solid #0f3460;padding-top:8px">Drives</div>
+<div id="drive-list"></div>
+</div>
+<div class="files-main">
+<div class="path-bar">
+<button class="btn btn-primary" id="btn-back" title="Back">&#9664;</button>
+<button class="btn btn-primary" id="btn-up" title="Up one level">&#9650;</button>
+<button class="btn btn-primary" id="btn-refresh" title="Refresh">&#8635;</button>
+<input type="text" id="path-input" placeholder="Enter path...">
+<button class="btn btn-primary" id="btn-go-path">Go</button>
+</div>
+<div class="file-toolbar">
+<button class="btn btn-primary" id="btn-upload">Upload</button>
+<button class="btn btn-primary" id="btn-upload-folder">Upload Folder</button>
+<button class="btn btn-primary" id="btn-mkdir">New Folder</button>
+<input type="file" multiple class="hidden-input" id="file-input">
+<input type="file" multiple webkitdirectory class="hidden-input" id="folder-input">
+<span id="files-loading" style="font-size:13px;color:#8892b0"></span>
+<span class="file-status" id="file-status"></span>
+</div>
+<div class="table-wrap">
+<table class="file-table">
+<thead><tr><th data-sort="name">Name <span class="sort-arrow"></span></th><th data-sort="size">Size <span class="sort-arrow"></span></th><th data-sort="mtime">Modified <span class="sort-arrow"></span></th><th>Actions</th></tr></thead>
+<tbody id="file-list"></tbody>
+</table>
+</div>
+</div>
+</div>
+<div id="desktop-panel" class="panel active">
+<div class="desktop-toolbar" id="desktop-toolbar">
+<button class="btn btn-primary" id="btn-fullscreen">Fullscreen</button>
+<button class="btn btn-primary" id="btn-control-toggle">Enable Control</button>
+<button class="btn btn-primary" id="btn-autofit">Autofit: On</button>
+<label style="font-size:13px;color:#8892b0">FPS:</label>
+<select id="fps-select">
+<option value="1">1 fps</option>
+<option value="2">2 fps</option>
+<option value="5">5 fps</option>
+<option value="10" selected>10 fps</option>
+<option value="15">15 fps</option>
+<option value="20">20 fps</option>
+</select>
+<span class="live-indicator" id="live-indicator" style="display:none"><span class="live-dot"></span>Live</span>
+<span id="control-indicator" style="display:none;font-size:13px;font-weight:600;color:#e74c3c">CONTROL ACTIVE</span>
+</div>
+<div class="desktop-view">
+<img id="desktop-img" src="" alt="Desktop" style="display:none">
+<canvas id="desktop-canvas" style="display:none" tabindex="0"></canvas>
+</div>
+</div>
+<div id="logs-panel" class="panel">
+<div class="log-toolbar">
+<button class="btn btn-danger" id="btn-clear-logs">Clear</button>
+<span style="font-size:13px;color:#8892b0" id="log-count">0 entries</span>
+</div>
+<div class="log-container" id="log-container"></div>
+</div>
+<div id="settings-panel" class="panel">
+<div class="settings-form">
+<h3 style="margin-bottom:20px;color:#64ffda">Server Settings</h3>
+<div class="settings-group">
+<label>Port</label>
+<input type="number" id="set-port" placeholder="8080">
+<div class="hint">Requires server restart to take effect</div>
+</div>
+<div class="settings-group">
+<label>Bind Host</label>
+<input type="text" id="set-host" placeholder="0.0.0.0">
+<div class="hint">Requires server restart to take effect</div>
+</div>
+<div class="settings-group">
+<label>Password (optional)</label>
+<input type="text" id="set-password" placeholder="Leave empty to disable auth">
+<div class="hint">Leave empty for no authentication</div>
+</div>
+<button class="btn btn-success" id="btn-save-settings">Save Settings</button>
+<button class="btn btn-primary" id="btn-reload-settings" style="margin-left:8px">Reload</button>
+<div class="settings-msg" id="settings-msg"></div>
+</div>
+</div>
+<div id="about-panel" class="panel" style="padding:24px;overflow:auto">
+<div style="max-width:500px">
+<h3 style="margin-bottom:20px;color:#64ffda">About NodeDesk</h3>
+<p style="font-size:14px;line-height:1.8;color:#ccd6f6;margin-bottom:16px">A portable, browser-based remote desktop and file manager powered by Node.js. No installation or admin rights required on either the server or client side.</p>
+<div style="background:#16213e;border:1px solid #0f3460;border-radius:6px;padding:16px;margin-bottom:16px">
+<div style="margin-bottom:8px"><span style="color:#8892b0;font-size:13px">Author</span><br><span style="color:#e0e0e0;font-size:15px;font-weight:600">Akshay Kanere</span></div>
+<div><span style="color:#8892b0;font-size:13px">Email</span><br><a href="mailto:thegr8akshay@gmail.com" style="color:#64ffda;font-size:14px;text-decoration:none">thegr8akshay@gmail.com</a></div>
+</div>
+<p style="font-size:13px;color:#8892b0">Licensed under MIT</p>
+</div>
+</div>
+<div class="modal-overlay" id="mkdir-modal">
+<div class="modal">
+<h3>New Folder</h3>
+<input type="text" id="mkdir-name" placeholder="Folder name">
+<div class="modal-actions">
+<button class="btn btn-primary" id="mkdir-cancel">Cancel</button>
+<button class="btn btn-success" id="mkdir-confirm">Create</button>
+</div>
+</div>
+</div>
+
+
+<script>
+(function(){
+var currentPassword='';
+var loginScreen=document.getElementById('login-screen');
+var mainNavbar=document.getElementById('main-navbar');
+var loginError=document.getElementById('login-error');
+var loginPasswordEl=document.getElementById('login-password');
+var logoutBtn=document.getElementById('btn-logout');
+var tabs=document.querySelectorAll('.tab');
+var panels=document.querySelectorAll('.panel');
+function getAuth(){return currentPassword}
+function authHeaders(){return{'X-Auth':getAuth()}}
+
+function showApp(){
+document.body.classList.remove('loading');
+loginScreen.style.display='none';
+mainNavbar.style.display='flex';
+panels.forEach(function(p){if(p.classList.contains('active'))p.style.display='flex';});
+logoutBtn.style.display=currentPassword?'inline-block':'none';
+loadShortcuts();
+loadDrives();
+loadFiles(currentPath);
+autoStartDesktop();
+}
+
+function showLogin(){
+loginScreen.style.display='flex';
+mainNavbar.style.display='none';
+panels.forEach(function(p){p.style.display='none';});
+loginError.style.display='none';
+loginPasswordEl.value='';
+loginPasswordEl.focus();
+}
+
+document.getElementById('btn-login').addEventListener('click',function(){
+var pw=loginPasswordEl.value;
+currentPassword=pw;
+fetch('/api/files?path='+encodeURIComponent(navigator.platform.indexOf('Win')>-1?'C:\\':'/'),{headers:authHeaders()})
+.then(function(r){
+if(r.status===401){loginError.style.display='block';currentPassword='';return;}
+showApp();
+}).catch(function(){loginError.style.display='block';currentPassword='';});
+});
+loginPasswordEl.addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('btn-login').click();});
+
+logoutBtn.addEventListener('click',function(){
+currentPassword='';
+showLogin();
+});
+
+fetch('/api/auth-required').then(function(r){return r.json()}).then(function(d){
+if(d.required){showLogin();}else{showApp();}
+}).catch(function(){showApp();});
+var logContainer=document.getElementById('log-container');
+var logCountEl=document.getElementById('log-count');
+var logEntries=0;
+var logBuffer=[];
+var activeTab='desktop';
+function clientLog(msg,level){
+level=level||'info';
+var d=new Date();
+var ts=d.toLocaleTimeString()+'.'+String(d.getMilliseconds()).padStart(3,'0');
+logBuffer.push({ts:ts,msg:msg,level:level});
+logEntries++;
+logCountEl.textContent=logEntries+' entries';
+if(activeTab==='logs')flushLogs();
+}
+function flushLogs(){
+while(logBuffer.length){
+var entry=logBuffer.shift();
+var div=document.createElement('div');
+div.className='log-entry log-'+entry.level;
+div.innerHTML='<span class="log-time">['+entry.ts+']</span> <span class="log-msg">'+escHtml(entry.msg)+'</span>';
+logContainer.appendChild(div);
+}
+logContainer.scrollTop=logContainer.scrollHeight;
+}
+document.getElementById('btn-clear-logs').addEventListener('click',function(){logContainer.innerHTML='';logBuffer=[];logEntries=0;logCountEl.textContent='0 entries'});
+tabs.forEach(function(t){t.addEventListener('click',function(){
+tabs.forEach(function(x){x.classList.remove('active')});
+panels.forEach(function(x){x.classList.remove('active');x.style.display='none';});
+t.classList.add('active');
+activeTab=t.dataset.tab;
+var panel=document.getElementById(t.dataset.tab+'-panel');
+panel.classList.add('active');
+panel.style.display='flex';
+if(activeTab==='files')loadFiles(currentPath);
+if(activeTab==='logs')flushLogs();
+if(activeTab==='settings')loadSettings();
+document.getElementById('desktop-toolbar').style.display=(activeTab==='desktop')?'flex':'none';
+if(activeTab==='desktop'){startDesktopStream();}else{stopDesktopStream();}
+})});
+
+var currentPath=navigator.platform.indexOf('Win')>-1?'C:\\':'/';
+var pathHistory=[];
+var pathInput=document.getElementById('path-input');
+var fileListEl=document.getElementById('file-list');
+var filesLoading=document.getElementById('files-loading');
+var fileStatusEl=document.getElementById('file-status');
+var driveListEl=document.getElementById('drive-list');
+var cachedFiles=[];
+var sortCol='name';
+
+var shortcutListEl=document.getElementById('shortcut-list');
+function loadShortcuts(){
+fetch('/api/shortcuts',{headers:authHeaders()})
+.then(function(r){return r.json()})
+.then(function(shortcuts){
+shortcutListEl.innerHTML='';
+shortcuts.forEach(function(s){
+var div=document.createElement('div');
+div.className='drive-item';
+div.innerHTML='<span class="drive-icon">'+s.icon+'</span><div><div class="drive-label">'+escHtml(s.name)+'</div></div>';
+div.addEventListener('click',function(){navigateTo(s.path);});
+shortcutListEl.appendChild(div);
+});
+}).catch(function(){});
+}
+
+function loadDrives(){
+fetch('/api/drives',{headers:authHeaders()})
+.then(function(r){return r.json()})
+.then(function(drives){
+driveListEl.innerHTML='';
+drives.forEach(function(d){
+var div=document.createElement('div');
+div.className='drive-item';
+var drivePath=d.letter.length<=2?d.letter+'\\':d.letter;
+var infoText='';
+if(d.total>0){
+var usedPct=Math.round(((d.total-d.free)/d.total)*100);
+infoText=formatSize(d.free)+' free of '+formatSize(d.total);
+}
+div.innerHTML='<span class="drive-icon">\uD83D\uDCBF</span><div><div class="drive-label">'+escHtml(d.letter)+'</div>'+(infoText?'<div class="drive-info">'+escHtml(infoText)+'</div>':'')+'</div>';
+div.addEventListener('click',function(){navigateTo(drivePath);});
+driveListEl.appendChild(div);
+});
+updateActiveDrive();
+}).catch(function(){});
+}
+
+function updateActiveDrive(){
+var items=driveListEl.querySelectorAll('.drive-item');
+items.forEach(function(item){
+var label=item.querySelector('.drive-label');
+if(label&&currentPath.toUpperCase().startsWith(label.textContent.toUpperCase()))item.classList.add('active');
+else item.classList.remove('active');
+});
+}
+var sortAsc=true;
+
+function getSep(){return currentPath.indexOf('\\')>-1?'\\':'/';}
+function joinPath(base,name){var s=getSep();return base+(base.endsWith(s)?'':s)+name;}
+function getParentPath(p){
+var s=getSep();
+if(p===s||p==='/'||(p.length===3&&p[1]===':'))return p;
+var trimmed=p.endsWith(s)?p.slice(0,-1):p;
+var idx=Math.max(trimmed.lastIndexOf('/'),trimmed.lastIndexOf('\\'));
+if(idx<=0)return s;
+var parent=trimmed.substring(0,idx);
+if(parent.length===2&&parent[1]===':')parent+=s;
+return parent;
+}
+
+function formatSize(bytes){
+if(bytes==null)return'-';
+if(bytes<1024)return bytes+' B';
+if(bytes<1048576)return(bytes/1024).toFixed(1)+' KB';
+if(bytes<1073741824)return(bytes/1048576).toFixed(1)+' MB';
+return(bytes/1073741824).toFixed(2)+' GB';
+}
+function formatDate(d){
+if(!d)return'-';
+var dt=new Date(d);
+return dt.toLocaleDateString()+' '+dt.toLocaleTimeString();
+}
+function fileIcon(name,isDir){
+if(isDir)return'\uD83D\uDCC1';
+var ext=(name.lastIndexOf('.')>-1?name.substring(name.lastIndexOf('.')+1):'').toLowerCase();
+var icons={'jpg':'\uD83D\uDDBC','jpeg':'\uD83D\uDDBC','png':'\uD83D\uDDBC','gif':'\uD83D\uDDBC','bmp':'\uD83D\uDDBC','svg':'\uD83D\uDDBC','webp':'\uD83D\uDDBC',
+'mp4':'\uD83C\uDFAC','avi':'\uD83C\uDFAC','mkv':'\uD83C\uDFAC','mov':'\uD83C\uDFAC','wmv':'\uD83C\uDFAC',
+'mp3':'\uD83C\uDFB5','wav':'\uD83C\uDFB5','flac':'\uD83C\uDFB5','ogg':'\uD83C\uDFB5','aac':'\uD83C\uDFB5',
+'zip':'\uD83D\uDCE6','rar':'\uD83D\uDCE6','7z':'\uD83D\uDCE6','tar':'\uD83D\uDCE6','gz':'\uD83D\uDCE6',
+'pdf':'\uD83D\uDCC4','doc':'\uD83D\uDCC4','docx':'\uD83D\uDCC4','xls':'\uD83D\uDCC4','xlsx':'\uD83D\uDCC4','ppt':'\uD83D\uDCC4','pptx':'\uD83D\uDCC4',
+'txt':'\uD83D\uDCDD','log':'\uD83D\uDCDD','md':'\uD83D\uDCDD','csv':'\uD83D\uDCDD',
+'js':'\uD83D\uDCDC','ts':'\uD83D\uDCDC','py':'\uD83D\uDCDC','java':'\uD83D\uDCDC','c':'\uD83D\uDCDC','cpp':'\uD83D\uDCDC','h':'\uD83D\uDCDC','cs':'\uD83D\uDCDC','rb':'\uD83D\uDCDC','go':'\uD83D\uDCDC','rs':'\uD83D\uDCDC','php':'\uD83D\uDCDC','html':'\uD83D\uDCDC','css':'\uD83D\uDCDC','json':'\uD83D\uDCDC','xml':'\uD83D\uDCDC','yml':'\uD83D\uDCDC','yaml':'\uD83D\uDCDC','sh':'\uD83D\uDCDC','bat':'\uD83D\uDCDC','ps1':'\uD83D\uDCDC',
+'exe':'\u2699','msi':'\u2699','dll':'\u2699','sys':'\u2699',
+'iso':'\uD83D\uDCBF','img':'\uD83D\uDCBF'};
+return icons[ext]||'\uD83D\uDCC4';
+}
+function escHtml(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function escAttr(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}
+
+function updatePathInput(p){pathInput.value=p;}
+
+function navigateTo(p){
+if(p!==currentPath)pathHistory.push(currentPath);
+currentPath=p;
+loadFiles(currentPath);
+}
+
+document.getElementById('btn-go-path').addEventListener('click',function(){var p=pathInput.value.trim();if(p)navigateTo(p);});
+pathInput.addEventListener('keydown',function(e){if(e.key==='Enter'){var p=pathInput.value.trim();if(p)navigateTo(p);}});
+document.getElementById('btn-back').addEventListener('click',function(){if(pathHistory.length){currentPath=pathHistory.pop();loadFiles(currentPath);}});
+document.getElementById('btn-up').addEventListener('click',function(){var parent=getParentPath(currentPath);if(parent!==currentPath)navigateTo(parent);});
+document.getElementById('btn-refresh').addEventListener('click',function(){loadFiles(currentPath);});
+
+function sortFiles(files){
+var dirs=[];var fls=[];
+files.forEach(function(f){if(f.type==='dir')dirs.push(f);else fls.push(f);});
+function cmp(a,b){
+var va,vb;
+if(sortCol==='name'){va=a.name.toLowerCase();vb=b.name.toLowerCase();return va<vb?-1:va>vb?1:0;}
+if(sortCol==='size'){va=a.size||0;vb=b.size||0;return va-vb;}
+if(sortCol==='mtime'){va=new Date(a.mtime||0).getTime();vb=new Date(b.mtime||0).getTime();return va-vb;}
+return 0;
+}
+dirs.sort(function(a,b){var r=cmp(a,b);return sortAsc?r:-r;});
+fls.sort(function(a,b){var r=cmp(a,b);return sortAsc?r:-r;});
+return dirs.concat(fls);
+}
+
+function updateSortArrows(){
+document.querySelectorAll('.file-table th[data-sort]').forEach(function(th){
+var arrow=th.querySelector('.sort-arrow');
+if(th.dataset.sort===sortCol)arrow.textContent=sortAsc?'\u25B2':'\u25BC';
+else arrow.textContent='';
+});
+}
+
+document.querySelectorAll('.file-table th[data-sort]').forEach(function(th){
+th.addEventListener('click',function(){
+if(sortCol===th.dataset.sort)sortAsc=!sortAsc;
+else{sortCol=th.dataset.sort;sortAsc=true;}
+updateSortArrows();
+renderFiles();
+});
+});
+
+function renderFiles(){
+var sorted=sortFiles(cachedFiles);
+var s=getSep();
+fileListEl.innerHTML='';
+var isRoot=(currentPath===s||currentPath==='/'||(currentPath.length===3&&currentPath[1]===':'));
+if(!isRoot){
+var tr=document.createElement('tr');
+tr.className='parent-row';
+tr.innerHTML='<td><span class="file-name folder"><span class="file-icon">\u2B06</span>..</span></td><td>-</td><td>-</td><td></td>';
+tr.querySelector('.file-name').addEventListener('click',function(){navigateTo(getParentPath(currentPath));});
+fileListEl.appendChild(tr);
+}
+var dirCount=0,fileCount=0,totalSize=0;
+sorted.forEach(function(f){
+var isDir=f.type==='dir';
+if(isDir)dirCount++;else{fileCount++;totalSize+=f.size||0;}
+var fullPath=joinPath(currentPath,f.name);
+var tr=document.createElement('tr');
+var actionsHtml='';
+if(!isDir)actionsHtml+='<button class="btn btn-primary btn-dl" data-path="'+escAttr(fullPath)+'" title="Download">Download</button>';
+
+
+tr.innerHTML='<td><span class="file-name '+(isDir?'folder':'file')+'"><span class="file-icon">'+fileIcon(f.name,isDir)+'</span>'+escHtml(f.name)+'</span></td><td>'+(isDir?'-':formatSize(f.size))+'</td><td>'+formatDate(f.mtime)+'</td><td class="file-actions">'+actionsHtml+'</td>';
+if(isDir){
+tr.querySelector('.file-name').addEventListener('click',function(){navigateTo(fullPath);});
+}
+fileListEl.appendChild(tr);
+});
+fileStatusEl.textContent=dirCount+' folder'+(dirCount!==1?'s':'')+', '+fileCount+' file'+(fileCount!==1?'s':'')+' ('+formatSize(totalSize)+')';
+fileListEl.querySelectorAll('.btn-dl').forEach(function(b){
+b.addEventListener('click',function(){
+var x=new XMLHttpRequest();
+x.open('GET','/api/files/download?path='+encodeURIComponent(b.dataset.path));
+x.setRequestHeader('X-Auth',getAuth());
+x.responseType='blob';
+x.onload=function(){
+if(x.status===200){
+clientLog('Downloaded: '+b.dataset.path+' ('+formatSize(x.response.size)+')','success');
+var url=URL.createObjectURL(x.response);
+var a=document.createElement('a');a.href=url;a.download=b.dataset.path.split(/[/\\]/).pop();a.click();
+URL.revokeObjectURL(url);
+}else{clientLog('Download failed: HTTP '+x.status,'error');}
+};
+x.send();
+});
+});
+
+
+}
+
+function loadFiles(path){
+filesLoading.textContent='Loading...';
+updatePathInput(path);
+updateActiveDrive();
+fetch('/api/files?path='+encodeURIComponent(path),{headers:authHeaders()})
+.then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+.then(function(files){
+filesLoading.textContent='';
+cachedFiles=files;
+clientLog('Listed '+files.length+' items in '+path,'info');
+updateSortArrows();
+renderFiles();
+}).catch(function(e){filesLoading.textContent='Error: '+e.message;clientLog('File list error: '+e.message,'error');});
+}
+
+document.getElementById('btn-upload').addEventListener('click',function(){document.getElementById('file-input').click();});
+document.getElementById('btn-upload-folder').addEventListener('click',function(){document.getElementById('folder-input').click();});
+
+function handleUpload(e){
+var files=e.target.files;
+if(!files.length)return;
+var fd=new FormData();
+for(var i=0;i<files.length;i++)fd.append('files',files[i]);
+filesLoading.textContent='Uploading '+files.length+' file(s)...';
+clientLog('Uploading '+files.length+' file(s) to '+currentPath,'info');
+fetch('/api/files/upload?path='+encodeURIComponent(currentPath),{method:'POST',headers:authHeaders(),body:fd})
+.then(function(){filesLoading.textContent='';clientLog('Upload complete ('+files.length+' files)','success');loadFiles(currentPath);e.target.value='';})
+.catch(function(err){filesLoading.textContent='Upload error: '+err.message;clientLog('Upload error: '+err.message,'error');});
+}
+document.getElementById('file-input').addEventListener('change',handleUpload);
+document.getElementById('folder-input').addEventListener('change',handleUpload);
+
+var mkdirModal=document.getElementById('mkdir-modal');
+var mkdirName=document.getElementById('mkdir-name');
+document.getElementById('btn-mkdir').addEventListener('click',function(){mkdirModal.style.display='flex';mkdirName.value='';mkdirName.focus();});
+document.getElementById('mkdir-cancel').addEventListener('click',function(){mkdirModal.style.display='none';});
+document.getElementById('mkdir-confirm').addEventListener('click',function(){
+var name=mkdirName.value.trim();
+if(!name)return;
+mkdirModal.style.display='none';
+var full=joinPath(currentPath,name);
+clientLog('Creating folder: '+full,'info');
+fetch('/api/files/mkdir',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify({path:full})})
+.then(function(){clientLog('Created folder: '+full,'success');loadFiles(currentPath);});
+});
+mkdirName.addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('mkdir-confirm').click();});
+
+
+var desktopImg=document.getElementById('desktop-img');
+var desktopCanvas=document.getElementById('desktop-canvas');
+var canvasCtx=desktopCanvas.getContext('2d');
+var streaming=false;
+var controlActive=false;
+
+var controlBtn=document.getElementById('btn-control-toggle');
+var controlInd=document.getElementById('control-indicator');
+var liveInd=document.getElementById('live-indicator');
+var fpsSelect=document.getElementById('fps-select');
+var screenW=1920,screenH=1080;
+var dws=null;
+var frameCount=0;
+var fpsCounter=0;
+var lastFpsTime=Date.now();
+
+function connectDesktopWs(onReady){
+if(dws&&dws.readyState<=1){if(onReady)onReady();return;}
+var proto=location.protocol==='https:'?'wss:':'ws:';
+dws=new WebSocket(proto+'//'+location.host+'/ws/desktop');
+dws.binaryType='arraybuffer';
+dws.onopen=function(){
+dws.send(JSON.stringify({type:'auth',password:getAuth()}));
+};
+dws.onmessage=function(e){
+if(typeof e.data==='string'){
+try{var m=JSON.parse(e.data);if(m.type==='auth'&&m.success){clientLog('Desktop WebSocket connected','success');if(onReady)onReady();}else if(m.type==='auth'){clientLog('Desktop auth failed','error');}}catch(_){}
+return;
+}
+var blob=new Blob([e.data],{type:'image/jpeg'});
+var url=URL.createObjectURL(blob);
+var img=new Image();
+img.onload=function(){
+if(screenW!==img.width||screenH!==img.height){screenW=img.width;screenH=img.height;}
+desktopCanvas.width=img.width;
+desktopCanvas.height=img.height;
+canvasCtx.drawImage(img,0,0);
+URL.revokeObjectURL(url);
+fpsCounter++;
+var now=Date.now();
+if(now-lastFpsTime>=1000){
+var realFps=fpsCounter;
+fpsCounter=0;
+lastFpsTime=now;
+}
+};
+img.src=url;
+};
+dws.onclose=function(){clientLog('Desktop WebSocket disconnected','warn');dws=null;};
+dws.onerror=function(){clientLog('Desktop WebSocket error','error');};
+}
+
+function sendDws(obj){
+if(dws&&dws.readyState===1)dws.send(JSON.stringify(obj));
+}
+
+function startWsStream(fps){
+connectDesktopWs(function(){sendDws({type:'start',fps:fps});});
+}
+
+function stopWsStream(){
+if(dws&&dws.readyState===1)sendDws({type:'stop'});
+}
+
+function getScaledCoords(e){
+var rect=desktopCanvas.getBoundingClientRect();
+var scaleX=screenW/rect.width;
+var scaleY=screenH/rect.height;
+return{x:Math.round((e.clientX-rect.left)*scaleX),y:Math.round((e.clientY-rect.top)*scaleY)};
+}
+
+var mouseThrottle=0;
+desktopCanvas.addEventListener('mousemove',function(e){
+if(!controlActive)return;
+var now=Date.now();
+if(now-mouseThrottle<16)return;
+mouseThrottle=now;
+var c=getScaledCoords(e);
+sendDws({type:'mouse',action:'move',x:c.x,y:c.y});
+});
+
+desktopCanvas.addEventListener('mousedown',function(e){
+if(!controlActive)return;
+e.preventDefault();
+desktopCanvas.focus();
+var c=getScaledCoords(e);
+var btn=e.button===2?'right':e.button===1?'middle':'left';
+sendDws({type:'mouse',action:'down',x:c.x,y:c.y,button:btn});
+});
+
+desktopCanvas.addEventListener('mouseup',function(e){
+if(!controlActive)return;
+e.preventDefault();
+var c=getScaledCoords(e);
+var btn=e.button===2?'right':e.button===1?'middle':'left';
+sendDws({type:'mouse',action:'up',x:c.x,y:c.y,button:btn});
+});
+
+desktopCanvas.addEventListener('click',function(e){
+if(controlActive)e.preventDefault();
+});
+
+desktopCanvas.addEventListener('dblclick',function(e){
+if(controlActive)e.preventDefault();
+});
+
+desktopCanvas.addEventListener('contextmenu',function(e){
+if(!controlActive)return;
+e.preventDefault();
+var c=getScaledCoords(e);
+sendDws({type:'mouse',action:'click',x:c.x,y:c.y,button:'right'});
+});
+
+desktopCanvas.addEventListener('wheel',function(e){
+if(!controlActive)return;
+e.preventDefault();
+var amount=e.deltaY>0?3:-3;
+sendDws({type:'mouse',action:'scroll',x:0,y:amount});
+},{passive:false});
+
+desktopCanvas.addEventListener('keydown',function(e){
+if(!controlActive)return;
+e.preventDefault();
+e.stopPropagation();
+var mods=[];
+if(e.ctrlKey)mods.push('ctrl');
+if(e.shiftKey)mods.push('shift');
+if(e.altKey)mods.push('alt');
+if(e.metaKey)mods.push('meta');
+var key=e.key;
+if(key==='Control'||key==='Shift'||key==='Alt'||key==='Meta')return;
+var action=(key.length===1&&mods.length===0)?'type':'press';
+sendDws({type:'key',action:action,key:key,modifiers:mods});
+});
+
+function updateCanvasVisibility(){
+if(streaming||controlActive){
+desktopCanvas.style.display='block';
+desktopImg.style.display='none';
+}else{
+desktopCanvas.style.display='none';
+}
+if(controlActive){
+desktopCanvas.classList.add('control-active');
+desktopCanvas.style.cursor='default';
+}else{
+desktopCanvas.classList.remove('control-active');
+desktopCanvas.style.cursor='default';
+}
+}
+
+function ensureStream(){
+var fps=parseInt(fpsSelect.value)||5;
+if(streaming||controlActive){
+startWsStream(fps);
+}else{
+stopWsStream();
+}
+updateCanvasVisibility();
+}
+
+function startDesktopStream(){
+streaming=true;
+liveInd.style.display='flex';
+controlActive=true;
+controlBtn.textContent='Disable Control';
+controlBtn.className='btn btn-danger';
+controlInd.style.display='inline';
+ensureStream();
+desktopCanvas.focus();
+clientLog('Desktop stream started at '+fpsSelect.value+' fps','success');
+}
+
+function stopDesktopStream(){
+streaming=false;
+liveInd.style.display='none';
+controlActive=false;
+controlBtn.textContent='Enable Control';
+controlBtn.className='btn btn-primary';
+controlInd.style.display='none';
+ensureStream();
+}
+
+function autoStartDesktop(){
+startDesktopStream();
+}
+
+controlBtn.addEventListener('click',function(){
+if(controlActive){
+controlActive=false;
+controlBtn.textContent='Enable Control';
+controlBtn.className='btn btn-primary';
+controlInd.style.display='none';
+clientLog('Remote control disabled','warn');
+}else{
+controlActive=true;
+controlBtn.textContent='Disable Control';
+controlBtn.className='btn btn-danger';
+controlInd.style.display='inline';
+desktopCanvas.focus();
+clientLog('Remote control enabled','success');
+}
+ensureStream();
+});
+document.getElementById('btn-fullscreen').addEventListener('click',function(){
+if(desktopCanvas.requestFullscreen)desktopCanvas.requestFullscreen();
+else if(desktopCanvas.webkitRequestFullscreen)desktopCanvas.webkitRequestFullscreen();
+});
+fpsSelect.addEventListener('change',function(){
+if(controlActive||streaming){
+var fps=parseInt(fpsSelect.value)||5;
+stopWsStream();
+startWsStream(fps);
+clientLog('FPS changed to '+fps,'info');
+}
+});
+
+var autofit=true;
+var autofitBtn=document.getElementById('btn-autofit');
+desktopCanvas.classList.add('autofit');
+function applyAutofit(){
+if(autofit){
+desktopCanvas.style.width='';
+desktopCanvas.style.height='';
+desktopCanvas.classList.add('autofit');
+autofitBtn.textContent='Autofit: On';
+}else{
+desktopCanvas.classList.remove('autofit');
+autofitBtn.textContent='Autofit: Off';
+}
+}
+autofitBtn.addEventListener('click',function(){
+autofit=!autofit;
+applyAutofit();
+clientLog('Autofit '+(autofit?'enabled':'disabled'),'info');
+});
+
+function loadSettings(){
+fetch('/api/settings',{headers:authHeaders()})
+.then(function(r){return r.json()})
+.then(function(s){
+document.getElementById('set-port').value=s.port||'';
+document.getElementById('set-host').value=s.host||'';
+document.getElementById('set-password').value=s.password||'';
+}).catch(function(){});
+}
+document.getElementById('btn-save-settings').addEventListener('click',function(){
+var data={
+port:parseInt(document.getElementById('set-port').value)||8080,
+host:document.getElementById('set-host').value||'0.0.0.0',
+password:document.getElementById('set-password').value
+};
+fetch('/api/settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(data)})
+.then(function(r){return r.json()})
+.then(function(r){
+var msg=document.getElementById('settings-msg');
+msg.style.color='#2ecc71';
+msg.textContent=r.message||'Saved';
+currentPassword=data.password;
+clientLog('Settings saved','success');
+}).catch(function(e){
+var msg=document.getElementById('settings-msg');
+msg.style.color='#e74c3c';
+msg.textContent='Error: '+e.message;
+});
+});
+document.getElementById('btn-reload-settings').addEventListener('click',function(){loadSettings()});
+})();
+</script>
+</body>
+</html>
