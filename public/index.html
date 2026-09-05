@@ -97,7 +97,9 @@ body.loading .panel{display:none !important}
 .log-entry.log-info .log-msg{color:#8892b0}
 .log-entry.log-success .log-msg{color:#2ecc71}
 .log-entry.log-warn .log-msg{color:#f39c12}
-.log-entry.log-error .log-msg{color:#e74c3c}
+.desktop-lock-banner{display:flex;align-items:center;gap:12px;background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#fca5a5;padding:10px 16px;border-radius:6px;margin-bottom:12px;font-size:13px;width:100%;box-sizing:border-box}
+.desktop-lock-banner .lock-icon{font-size:22px;flex-shrink:0}
+.desktop-lock-banner .lock-text strong{display:block;color:#ffffff;font-size:14px;margin-bottom:2px}
 </style>
 </head>
 <body class="loading">
@@ -154,6 +156,13 @@ body.loading .panel{display:none !important}
 </div>
 </div>
 <div id="desktop-panel" class="panel active">
+<div class="desktop-lock-banner" id="desktop-lock-banner" style="display:none">
+<span class="lock-icon">&#128274;</span>
+<div class="lock-text">
+<strong>Remote Host is Locked (Windows Secure Desktop)</strong>
+<span>Windows security restricts view and input on the login screen. Unlock at the physical monitor to resume live control.</span>
+</div>
+</div>
 <div class="desktop-toolbar" id="desktop-toolbar">
 <button class="btn btn-primary" id="btn-fullscreen">Fullscreen</button>
 <button class="btn btn-primary" id="btn-control-toggle">Enable Control</button>
@@ -199,6 +208,13 @@ body.loading .panel{display:none !important}
 <label>Password (optional)</label>
 <input type="text" id="set-password" placeholder="Leave empty to disable auth">
 <div class="hint">Leave empty for no authentication</div>
+</div>
+<div class="settings-group">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="set-keep-awake" checked style="width:auto;margin:0">
+<span style="color:#ccd6f6;font-size:14px">Prevent Sleep & Auto-Lock (Keep-Awake)</span>
+</label>
+<div class="hint">Prevents Windows from locking or sleeping due to inactivity while NodeDesk is running</div>
 </div>
 <button class="btn btn-success" id="btn-save-settings">Save Settings</button>
 <button class="btn btn-primary" id="btn-reload-settings" style="margin-left:8px">Reload</button>
@@ -591,7 +607,17 @@ dws.send(JSON.stringify({type:'auth',password:getAuth()}));
 };
 dws.onmessage=function(e){
 if(typeof e.data==='string'){
-try{var m=JSON.parse(e.data);if(m.type==='auth'&&m.success){clientLog('Desktop WebSocket connected','success');if(onReady)onReady();}else if(m.type==='auth'){clientLog('Desktop auth failed','error');}}catch(_){}
+try{
+var m=JSON.parse(e.data);
+if(m.type==='auth'&&m.success){clientLog('Desktop WebSocket connected','success');if(onReady)onReady();}
+else if(m.type==='auth'){clientLog('Desktop auth failed','error');}
+else if(m.type==='lock_status'){
+var banner=document.getElementById('desktop-lock-banner');
+if(banner)banner.style.display=m.locked?'flex':'none';
+if(m.locked)clientLog('Host workstation locked at Windows Secure Desktop (Winlogon)','warn');
+else clientLog('Host workstation unlocked','info');
+}
+}catch(_){}
 return;
 }
 var blob=new Blob([e.data],{type:'image/jpeg'});
@@ -809,13 +835,15 @@ fetch('/api/settings',{headers:authHeaders()})
 document.getElementById('set-port').value=s.port||'';
 document.getElementById('set-host').value=s.host||'';
 document.getElementById('set-password').value=s.password||'';
+document.getElementById('set-keep-awake').checked=s.keepAwake!==false;
 }).catch(function(){});
 }
 document.getElementById('btn-save-settings').addEventListener('click',function(){
 var data={
 port:parseInt(document.getElementById('set-port').value)||8080,
 host:document.getElementById('set-host').value||'0.0.0.0',
-password:document.getElementById('set-password').value
+password:document.getElementById('set-password').value,
+keepAwake:document.getElementById('set-keep-awake').checked
 };
 fetch('/api/settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(data)})
 .then(function(r){return r.json()})

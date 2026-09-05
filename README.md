@@ -223,10 +223,12 @@ NodeDesk is designed for long-running, unattended operation:
 - **Health logging** — Memory and connection stats logged every 5 minutes
 - **Client resilience** — Clients can connect and disconnect freely without affecting the server
 - **Capture worker** — Persistent screen capture process, auto-restarts if it dies
+- **Keep-Awake & Anti-Lock** — Built-in power state management prevents display sleep and idle autolock while NodeDesk is running, keeping the remote desktop accessible without third-party tools
 
 ## Security Notes
 
 - No admin rights are needed — the server runs entirely in user space.
+- Windows Secure Desktop (Winlogon): Standard user-mode applications cannot view or enter passwords on the Windows login/credential prompt due to Windows OS desktop isolation. NodeDesk includes active lock detection to display clear status instead of a black screen, and keeps the machine awake to prevent auto-locking.
 - By default, authentication is disabled (no password). Set a password for any deployment beyond localhost.
 - When a password is set, a login page is shown to all clients before granting access.
 - The server binds to `0.0.0.0` (all interfaces) by default.

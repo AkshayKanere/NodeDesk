@@ -14,7 +14,7 @@ keyboard.config.autoDelayMs = 0;
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 function loadConfig() {
-  const defaults = { port: 8080, host: '0.0.0.0', password: '' };
+  const defaults = { port: 8080, host: '0.0.0.0', password: '', keepAwake: true };
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
@@ -26,6 +26,53 @@ function loadConfig() {
 
 function saveConfig(cfg) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+}
+
+let keepAwakeProc = null;
+
+function startKeepAwake() {
+  if (!isWindows) return;
+  if (CONFIG.keepAwake === false) {
+    stopKeepAwake();
+    return;
+  }
+  if (keepAwakeProc && !keepAwakeProc.killed) return;
+
+  const script = `
+$code = @'
+using System;
+using System.Runtime.InteropServices;
+public class PowerHelper {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern uint SetThreadExecutionState(uint esFlags);
+}
+'@
+Add-Type -TypeDefinition $code
+[PowerHelper]::SetThreadExecutionState(0x80000003)
+while ($true) {
+    Start-Sleep -Seconds 60
+    [PowerHelper]::SetThreadExecutionState(0x80000003)
+}
+`;
+  try {
+    keepAwakeProc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    keepAwakeProc.on('error', () => { keepAwakeProc = null; });
+    keepAwakeProc.on('close', () => { keepAwakeProc = null; });
+    log('POWER', 'Keep-Awake / Anti-Lock engine started (ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)');
+  } catch (e) {
+    log('POWER', `Failed to start Keep-Awake: ${e.message}`, 'WARN');
+  }
+}
+
+function stopKeepAwake() {
+  if (keepAwakeProc && !keepAwakeProc.killed) {
+    try { keepAwakeProc.kill(); } catch (_) {}
+    keepAwakeProc = null;
+    log('POWER', 'Keep-Awake engine stopped');
+  }
 }
 
 const CONFIG = loadConfig();
@@ -80,16 +127,21 @@ app.get('/api/auth-required', (req, res) => {
 app.use('/api', authMiddleware);
 
 app.get('/api/settings', (req, res) => {
-  res.json({ port: CONFIG.port, host: CONFIG.host, password: CONFIG.password });
+  res.json({ port: CONFIG.port, host: CONFIG.host, password: CONFIG.password, keepAwake: CONFIG.keepAwake !== false });
 });
 
 app.post('/api/settings', express.json(), (req, res) => {
-  const { port, host, password } = req.body;
+  const { port, host, password, keepAwake } = req.body;
   if (port !== undefined) CONFIG.port = parseInt(port, 10);
   if (host !== undefined) CONFIG.host = host;
   if (password !== undefined) CONFIG.password = password;
-  saveConfig({ port: CONFIG.port, host: CONFIG.host, password: CONFIG.password });
-  log('SETTINGS', `Config saved: port=${CONFIG.port} host=${CONFIG.host} auth=${CONFIG.password ? 'enabled' : 'disabled'}`);
+  if (keepAwake !== undefined) {
+    CONFIG.keepAwake = !!keepAwake;
+    if (CONFIG.keepAwake) startKeepAwake();
+    else stopKeepAwake();
+  }
+  saveConfig({ port: CONFIG.port, host: CONFIG.host, password: CONFIG.password, keepAwake: CONFIG.keepAwake });
+  log('SETTINGS', `Config saved: port=${CONFIG.port} host=${CONFIG.host} auth=${CONFIG.password ? 'enabled' : 'disabled'} keepAwake=${CONFIG.keepAwake}`);
   res.json({ success: true, message: 'Settings saved. Restart server for port/host changes.' });
 });
 
@@ -428,6 +480,7 @@ let captureReady = false;
 let captureBuf = Buffer.alloc(0);
 let captureHeaderParsed = false;
 let captureFrameSize = -1;
+let captureIsLocked = false;
 let captureCallbacks = [];
 
 function ensureCaptureWorker() {
@@ -438,6 +491,7 @@ function ensureCaptureWorker() {
   captureBuf = Buffer.alloc(0);
   captureHeaderParsed = false;
   captureFrameSize = -1;
+  captureIsLocked = false;
 
   captureProc.stdout.on('data', (chunk) => {
     captureBuf = Buffer.concat([captureBuf, chunk]);
@@ -447,7 +501,9 @@ function ensureCaptureWorker() {
         if (idx === -1) break;
         const header = captureBuf.slice(0, idx).toString();
         if (header.startsWith('FRAME:')) {
-          captureFrameSize = parseInt(header.split(':')[1]);
+          const parts = header.trim().split(':');
+          captureFrameSize = parseInt(parts[1], 10);
+          captureIsLocked = parts[2] === 'LOCKED';
           captureHeaderParsed = true;
           captureBuf = captureBuf.slice(idx + 1);
         } else {
@@ -461,7 +517,7 @@ function ensureCaptureWorker() {
         captureFrameSize = -1;
         captureReady = true;
         const cb = captureCallbacks.shift();
-        if (cb) cb(null, frame);
+        if (cb) cb(null, frame, captureIsLocked);
       } else break;
     }
   });
@@ -546,9 +602,13 @@ wssDesktop.on('connection', (ws, req) => {
 
       const sendLoop = () => {
         if (!streamRunning || ws.readyState !== 1) return;
-        captureFrame((err, frame) => {
+        captureFrame((err, frame, isLocked) => {
           if (err || !streamRunning || ws.readyState !== 1) return;
           try {
+            if (isLocked !== ws._lastLockedState) {
+              ws._lastLockedState = isLocked;
+              ws.send(JSON.stringify({ type: 'lock_status', locked: !!isLocked }));
+            }
             ws.send(frame, { binary: true });
           } catch (_) { streamRunning = false; return; }
           setTimeout(sendLoop, interval);
@@ -560,6 +620,7 @@ wssDesktop.on('connection', (ws, req) => {
       streamRunning = false;
       log('WS', `Desktop stream stopped for ${clientIp}`);
     } else if (msg.type === 'mouse') {
+      if (captureIsLocked) return;
       try {
         const btn = msg.button === 'right' ? Button.RIGHT : msg.button === 'middle' ? Button.MIDDLE : Button.LEFT;
         switch (msg.action) {
@@ -575,6 +636,7 @@ wssDesktop.on('connection', (ws, req) => {
         }
       } catch (_) {}
     } else if (msg.type === 'key') {
+      if (captureIsLocked) return;
       try {
         if (msg.action === 'type' && msg.key && msg.key.length === 1 && (!msg.modifiers || msg.modifiers.length === 0)) {
           await keyboard.type(msg.key);
@@ -698,6 +760,7 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('SIGINT', () => {
   log('SERVER', 'Received SIGINT, shutting down...');
+  stopKeepAwake();
   if (captureProc && !captureProc.killed) {
     captureProc.stdin.write('quit\n');
     captureProc.kill();
@@ -727,4 +790,5 @@ server.listen(CONFIG.port, CONFIG.host, () => {
   log('SERVER', `NodeDesk web server listening on http://${CONFIG.host}:${CONFIG.port}`);
   log('SERVER', `Auth: ${CONFIG.password ? 'enabled' : 'disabled'}`);
   log('SERVER', `Platform: ${process.platform} | Node: ${process.version} | PID: ${process.pid}`);
+  startKeepAwake();
 });

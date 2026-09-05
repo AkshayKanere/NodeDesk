@@ -47,6 +47,10 @@ $statusItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $statusItem.Text = "Running on port $port"
 $statusItem.Enabled = $false
 
+$keepAwakeItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$keepAwakeItem.Text = "Anti-Lock (Keep-Awake): Active"
+$keepAwakeItem.Enabled = $false
+
 $restartItem = New-Object System.Windows.Forms.ToolStripMenuItem
 $restartItem.Text = "Restart Server"
 $restartItem.Add_Click({
@@ -66,6 +70,7 @@ $exitItem.Add_Click({
 })
 
 $contextMenu.Items.Add($statusItem) | Out-Null
+$contextMenu.Items.Add($keepAwakeItem) | Out-Null
 $contextMenu.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 $contextMenu.Items.Add($openItem) | Out-Null
 $contextMenu.Items.Add($restartItem) | Out-Null
